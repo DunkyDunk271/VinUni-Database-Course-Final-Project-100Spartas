@@ -29,7 +29,7 @@ The Human Resources Information System (HRIS) is a comprehensive software soluti
 
 ## 🔧 Tech Stack
 - **Database**: MySQL
-- **Backend**: Python with Express
+- **Backend**: Python
 - **Frontend**: HTML, CSS, Javascript
 - **Authentication**: JWT (JSON Web Tokens) for secure access control
 - **Deployment**: Docker for containerization
