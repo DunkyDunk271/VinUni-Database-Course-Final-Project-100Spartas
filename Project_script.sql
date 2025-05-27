@@ -196,3 +196,36 @@ INSERT INTO UserAccount (adminID, Username, `password`) VALUES
 (2, 'binh_admin', 'pass123'),
 (3, 'dang_admin', 'pass123');
 
+-- View: EmployeePayrollSummary
+CREATE OR REPLACE VIEW EmployeePayrollSummary AS
+SELECT
+    e.EmployeeID,
+    CONCAT(e.FirstName, ' ', e.LastName) AS FullName,
+    p.PayDate,
+    p.Salary,
+    p.Bonus,
+    p.Deduction AS Deductions,
+    (p.Salary + p.Bonus - p.Deduction) AS NetPay
+FROM Employee e
+JOIN Payroll p ON e.EmployeeID = p.EmployeeID;
+
+-- View: LatestPerformanceReview
+CREATE OR REPLACE VIEW LatestPerformanceReview AS
+SELECT
+    pr.EmployeeID,
+    CONCAT(e.FirstName, ' ', e.LastName) AS FullName,
+    pr.ReviewDate,
+    pr.Score,
+    pr.Comments
+FROM PerformanceReview pr
+JOIN Employee e ON pr.EmployeeID = e.EmployeeID
+WHERE (pr.EmployeeID, pr.ReviewDate) IN (
+    SELECT EmployeeID, MAX(ReviewDate)
+    FROM PerformanceReview
+    GROUP BY EmployeeID
+);
+
+-- Indexes to speed up searching employee by names and emails
+CREATE INDEX idx_employee_firstname ON Employee (FirstName);
+CREATE INDEX idx_employee_lastname ON Employee (LastName);
+CREATE INDEX idx_employee_email ON Employee (Email);
