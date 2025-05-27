@@ -45,8 +45,8 @@ The Human Resources Information System (HRIS) is a comprehensive software soluti
 - **Week 2**: Development of core functionality (employee management, attendance tracking).
 - **Week 3**: Implementation of payroll and performance review modules.
 - **Week 4**: Testing, bug fixes, and documentation.
-- **Final Week**: Final presentation and submission.
+- **Final Week**: Final presentation and submission.     
 
 
-
+   
 
