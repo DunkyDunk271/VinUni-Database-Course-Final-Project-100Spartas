@@ -196,36 +196,86 @@ INSERT INTO UserAccount (adminID, Username, `password`) VALUES
 (2, 'binh_admin', 'pass123'),
 (3, 'dang_admin', 'pass123');
 
--- View: EmployeePayrollSummary
-CREATE OR REPLACE VIEW EmployeePayrollSummary AS
-SELECT
-    e.EmployeeID,
-    CONCAT(e.FirstName, ' ', e.LastName) AS FullName,
-    p.PayDate,
-    p.Salary,
-    p.Bonus,
-    p.Deduction AS Deductions,
-    (p.Salary + p.Bonus - p.Deduction) AS NetPay
-FROM Employee e
-JOIN Payroll p ON e.EmployeeID = p.EmployeeID;
+-- Procedure
+-- Add a new employee
+DELIMITER $$
+CREATE PROCEDURE sp_add_employee(
+    IN fName VARCHAR(50),
+    IN lName VARCHAR(50),
+    IN dob DATE,
+    IN phone VARCHAR(15),
+    IN email VARCHAR(100),
+    IN gender BINARY,
+    IN deptID INT
+)
+BEGIN
+    INSERT INTO Employee (FirstName, LastName, DOB, Phone, Email, Gender, DepartmentID)
+    VALUES (fName, lName, dob, phone, email, gender, deptID);
+END$$
+DELIMITER ;
 
--- View: LatestPerformanceReview
-CREATE OR REPLACE VIEW LatestPerformanceReview AS
-SELECT
-    pr.EmployeeID,
-    CONCAT(e.FirstName, ' ', e.LastName) AS FullName,
-    pr.ReviewDate,
-    pr.Score,
-    pr.Comments
-FROM PerformanceReview pr
-JOIN Employee e ON pr.EmployeeID = e.EmployeeID
-WHERE (pr.EmployeeID, pr.ReviewDate) IN (
-    SELECT EmployeeID, MAX(ReviewDate)
-    FROM PerformanceReview
-    GROUP BY EmployeeID
+-- Update employee phone and department
+DELIMITER $$
+CREATE PROCEDURE sp_update_employee_contact(
+    IN empID INT,
+    IN newPhone VARCHAR(15),
+    IN newDeptID INT
+)
+BEGIN
+    UPDATE Employee
+    SET Phone = newPhone, DepartmentID = newDeptID
+    WHERE EmployeeID = empID;
+END$$
+DELIMITER ;
+
+CREATE TABLE IF NOT EXISTS AuditLog (
+    LogID INT AUTO_INCREMENT PRIMARY KEY,
+    TableName VARCHAR(50),
+    ActionType VARCHAR(20),
+    ActionTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PerformedBy INT, -- Can be tied to UserID or AdminID
+    Description TEXT
 );
 
--- Indexes to speed up searching employee by names and emails
-CREATE INDEX idx_employee_firstname ON Employee (FirstName);
-CREATE INDEX idx_employee_lastname ON Employee (LastName);
-CREATE INDEX idx_employee_email ON Employee (Email);
+DELIMITER $$
+CREATE TRIGGER trg_audit_employee_update
+AFTER UPDATE ON Employee
+FOR EACH ROW
+BEGIN
+    INSERT INTO AuditLog (TableName, ActionType, PerformedBy, Description)
+    VALUES ('Employee', 'UPDATE', NULL, CONCAT('Updated EmployeeID: ', OLD.EmployeeID));
+END$$
+DELIMITER ;
+
+DELIMITER $$
+CREATE TRIGGER trg_validate_attendance
+BEFORE INSERT ON Attendance
+FOR EACH ROW
+BEGIN
+    IF NEW.timeOut <= NEW.timeIn THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Invalid attendance time: timeOut must be after timeIn';
+    END IF;
+END$$
+DELIMITER ;
+
+-- Index for faster lookups on foreign keys and filtering
+CREATE INDEX idx_employee_dept ON Employee(DepartmentID);
+CREATE INDEX idx_attendance_date ON Attendance(EmployeeID, Date);
+CREATE INDEX idx_payroll_paydate ON Payroll(PayDate);
+CREATE INDEX idx_review_date ON PerformanceReview(ReviewDate);
+ALTER TABLE Attendance
+PARTITION BY RANGE (MONTH(Date)) (
+PARTITION p1 VALUES LESS THAN (2),
+PARTITION p2 VALUES LESS THAN (3),
+PARTITION p3 VALUES LESS THAN (4),
+PARTITION p4 VALUES LESS THAN (5),
+PARTITION p5 VALUES LESS THAN (6),
+PARTITION p6 VALUES LESS THAN (7),
+PARTITION p7 VALUES LESS THAN (8),
+PARTITION p8 VALUES LESS THAN (9),
+PARTITION p9 VALUES LESS THAN (10),
+PARTITION p10 VALUES LESS THAN (11),
+PARTITION p11 VALUES LESS THAN (12),
+PARTITION p12 VALUES LESS THAN (13)
+);
