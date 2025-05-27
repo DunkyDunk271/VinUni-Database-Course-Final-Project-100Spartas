@@ -29,7 +29,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 origins = [
-    "http://localhost:8081",  # your frontend origin
+    "http://localhost:8080",  # your frontend origin
     # you can add more origins or use "*" for all (not recommended for production)
 ]
 
