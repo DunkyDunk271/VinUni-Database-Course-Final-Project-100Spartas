@@ -1,41 +1,92 @@
-
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, Edit, User } from 'lucide-react';
-import { employeeService } from '@/services/employeeService';
-import { departmentService } from '@/services/departmentService';
-import { Employee, Department } from '@/types/api';
+
+const API_URL = 'http://localhost:8000';
+
+interface Employee {
+  EmployeeID: number;
+  FirstName: string;
+  LastName: string;
+  Email?: string;
+  Phone?: string;
+  Gender?: number;
+  DepartmentID?: number;
+}
+
+interface Department {
+  DepartmentID: number;
+  DeptName: string;
+}
 
 const EmployeeTable = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const { data: employees = [], isLoading: employeesLoading } = useQuery({
-    queryKey: ['employees'],
-    queryFn: employeeService.getEmployees,
-  });
+  // Get JWT token from localStorage
+  const token = localStorage.getItem('access_token');
+  console.log('JWT Token:', token);
 
-  const { data: departments = [] } = useQuery({
-    queryKey: ['departments'],
-    queryFn: departmentService.getDepartments,
-  });
+  // Fetch employees from backend API
+  const fetchEmployees = async () => {
+    console.log('Fetching employees with token:', token);
+    try {
+      const response = await axios.get(`${API_URL}/employees`, {
+        headers: {
+          "Authorization": token ? `Bearer ${token}` : '',
+        },
+      });
+      console.log('Fetched Employees:', response.data);
+      setEmployees(response.data);
+    } catch (error) {
+      console.error('Failed to fetch employees', error);
+      setEmployees([]);
+    }
+  };
 
-  const filteredEmployees = employees.filter((employee: Employee) => {
+  // Fetch departments from backend API
+  const fetchDepartments = async () => {
+    try {
+      const response = await axios.get<Department[]>(`${API_URL}/departments/`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      });
+      setDepartments(response.data);
+    } catch (error) {
+      console.error('Failed to fetch departments', error);
+      setDepartments([]);
+    }
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([fetchEmployees(), fetchDepartments()])
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Filter employees by search term and department filter
+  const filteredEmployees = employees.filter((employee) => {
     const fullName = `${employee.FirstName} ${employee.LastName}`.toLowerCase();
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
-                         (employee.Email && employee.Email.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesDepartment = departmentFilter === 'all' || employee.DepartmentID?.toString() === departmentFilter;
+    const matchesSearch =
+      fullName.includes(searchTerm.toLowerCase()) ||
+      (employee.Email && employee.Email.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesDepartment =
+      departmentFilter === 'all' || employee.DepartmentID?.toString() === departmentFilter;
     return matchesSearch && matchesDepartment;
   });
 
   const getDepartmentName = (deptId?: number) => {
     if (!deptId) return 'No Department';
-    const dept = departments.find((d: Department) => d.DepartmentID === deptId);
+    const dept = departments.find((d) => d.DepartmentID === deptId);
     return dept?.DeptName || 'Unknown';
   };
 
@@ -47,12 +98,12 @@ const EmployeeTable = () => {
       'Quality Assurance': 'bg-purple-100 text-purple-700',
       'Human Resources': 'bg-orange-100 text-orange-700',
       'Sales': 'bg-red-100 text-red-700',
-      'Marketing': 'bg-pink-100 text-pink-700'
+      'Marketing': 'bg-pink-100 text-pink-700',
     };
     return colors[deptName] || 'bg-gray-100 text-gray-700';
   };
 
-  if (employeesLoading) {
+  if (loading) {
     return <div className="text-center py-8">Loading employees...</div>;
   }
 
@@ -76,7 +127,7 @@ const EmployeeTable = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Departments</SelectItem>
-              {departments.map((dept: Department) => (
+              {departments.map((dept) => (
                 <SelectItem key={dept.DepartmentID} value={dept.DepartmentID.toString()}>
                   {dept.DeptName}
                 </SelectItem>
@@ -103,7 +154,7 @@ const EmployeeTable = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredEmployees.map((employee: Employee) => (
+            {filteredEmployees.map((employee) => (
               <TableRow key={employee.EmployeeID} className="hover:bg-gray-50">
                 <TableCell>
                   <div className="flex items-center space-x-3">
@@ -131,7 +182,11 @@ const EmployeeTable = () => {
                 </TableCell>
                 <TableCell>
                   <span className="text-sm text-gray-700">
-                    {employee.Gender === 1 ? 'Male' : employee.Gender === 0 ? 'Female' : 'Not specified'}
+                    {employee.Gender === 1
+                      ? 'Male'
+                      : employee.Gender === 0
+                      ? 'Female'
+                      : 'Not specified'}
                   </span>
                 </TableCell>
                 <TableCell>

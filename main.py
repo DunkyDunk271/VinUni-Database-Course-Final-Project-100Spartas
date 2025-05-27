@@ -28,14 +28,9 @@ app = FastAPI(title="HRIS FastAPI Backend")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-origins = [
-    "http://localhost:8080",  # your frontend origin
-    # you can add more origins or use "*" for all (not recommended for production)
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # or ["*"] to allow all origins
+    allow_origins=["*"],  # allow all origins or specify your frontend URL
     allow_credentials=True,
     allow_methods=["*"],    # allow all HTTP methods (GET, POST, etc)
     allow_headers=["*"],    # allow all headers
@@ -54,7 +49,7 @@ class Employee(Base):
     EmployeeID = Column(Integer, primary_key=True, index=True)
     FirstName = Column(String(50), nullable=False)
     LastName = Column(String(50), nullable=False)
-    DOB = Column(Date)
+    DOB = Column(String(50), nullable=True)  # Store as string for simplicity
     Phone = Column(String(15))
     Email = Column(String(100), unique=True)
     Gender = Column(BINARY)
@@ -352,13 +347,16 @@ def create_employee(emp: EmployeeCreate, db: Session = Depends(get_db),
         db_emp.Gender = int.from_bytes(db_emp.Gender, "big")
     return db_emp
 
-@app.get("/employees/", response_model=List[EmployeeRead])
+@app.get("/employees", response_model=List[EmployeeRead])
 def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
                    current_user: UserAccount = Depends(get_current_active_user)):
     emps = db.query(Employee).offset(skip).limit(limit).all()
+    print(1)
     for e in emps:
         if e.Gender is not None:
             e.Gender = int.from_bytes(e.Gender, "big")
+        if e.DOB is not None:
+            e.DOB = e.DOB.isoformat()  # convert date to string here
     return emps
 
 @app.get("/employees/{employee_id}", response_model=EmployeeRead)
