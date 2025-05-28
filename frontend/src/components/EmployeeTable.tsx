@@ -64,8 +64,6 @@ const EmployeeTable = () => {
     }
   };
 
-  
-
   // Fetch departments from backend API
   const fetchDepartments = async () => {
     try {

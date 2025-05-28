@@ -212,6 +212,12 @@ INSERT INTO Payroll (EmployeeID, Salary, Bonus, Deduction, PayDate) VALUES
 (4, 21000000, 0, 0, '2025-05-31'),
 (5, 19000000, 1000000, 0, '2025-05-31');
 
+INSERT INTO Payroll (EmployeeID, Salary, Bonus, Deduction, PayDate) VALUES
+(6, 22000000, 2000000, 0, '2025-05-31'),
+(7, 15000000, 500000, 200000, '2025-05-31'),
+(8, 18000000, 0, 0, '2025-05-31'),
+(9, 17000000, 0, 1000000, '2025-05-31');
+
 -- Sample Performance Reviews (for Q1 2025)
 INSERT INTO PerformanceReview (EmployeeID, ReviewDate, Score, Comments, WorkingHours) VALUES
 (1, '2025-03-31', 8, 'Good performance, met all deadlines.', 480),

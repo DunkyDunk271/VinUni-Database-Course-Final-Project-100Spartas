@@ -13,6 +13,15 @@ from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
+from fastapi.responses import StreamingResponse
+import io
+from dateutil.relativedelta import relativedelta
+from sqlalchemy.exc import SQLAlchemyError
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.lib import colors
+from sqlalchemy import func
 
 # --- CONFIG ---
 DATABASE_URL = "mysql+pymysql://root:1234abcd@localhost:3306/HRIS"
@@ -429,13 +438,6 @@ def create_attendance(att: AttendanceCreate, db: Session = Depends(get_db),
         raise HTTPException(status_code=400, detail=str(e))
     db.refresh(db_att)
     return db_att
-
-'''
-@app.get("/attendances/", response_model=List[AttendanceRead])
-def read_attendances(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
-                     current_user: UserAccount = Depends(get_current_active_user)):
-    return db.query(Attendance).offset(skip).limit(limit).all()
-'''
     
 @app.get("/attendances/{attendance_id}", response_model=AttendanceRead)
 def read_attendance(attendance_id: int, db: Session = Depends(get_db),
@@ -474,6 +476,155 @@ def delete_attendance(attendance_id: int, db: Session = Depends(get_db),
     return {"detail": "Attendance deleted"}
 
 # Payroll CRUD
+@app.get("/payrolls/summary")
+def get_payroll_summary(db: Session = Depends(get_db)):
+    records = (
+        db.query(
+            Payroll.PayrollID,
+            Payroll.EmployeeID,
+            Payroll.Salary,
+            Payroll.Bonus,
+            Payroll.Deduction,
+            Payroll.PayDate,
+            Employee.FirstName,
+            Employee.LastName,
+            Department.DeptName
+        )
+        .join(Employee, Payroll.EmployeeID == Employee.EmployeeID)
+        .join(Department, Employee.DepartmentID == Department.DepartmentID, isouter=True)
+        .all()
+    )
+    result = []
+    for r in records:
+        net_pay = float(r.Salary) + float(r.Bonus) - float(r.Deduction)
+        result.append({
+            "payrollId": r.PayrollID,
+            "employeeId": r.EmployeeID,
+            "name": f"{r.FirstName} {r.LastName}",
+            "department": r.DeptName or "Unknown",
+            "salary": float(r.Salary),
+            "bonus": float(r.Bonus),
+            "deduction": float(r.Deduction),
+            "netPay": net_pay,
+            "payDate": r.PayDate.isoformat() if r.PayDate else None,
+        })
+    return result
+
+@app.get("/payrolls/report")
+def generate_payroll_report(db: Session = Depends(get_db),
+                            current_user: UserAccount = Depends(get_current_active_user)):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    
+    # Fetch payroll data
+    payrolls = (
+        db.query(
+            Payroll.PayrollID,
+            Employee.FirstName,
+            Employee.LastName,
+            Payroll.Salary,
+            Payroll.Bonus,
+            Payroll.Deduction,
+            Payroll.PayDate,
+        )
+        .join(Employee, Payroll.EmployeeID == Employee.EmployeeID)
+        .all()
+    )
+
+    # Prepare table data with headers
+    data = [
+        ["ID", "Employee", "Salary", "Bonus", "Deduction", "Net Pay", "Pay Date"]
+    ]
+    for p in payrolls:
+        net = float(p.Salary) + float(p.Bonus or 0) - float(p.Deduction or 0)
+        data.append([
+            str(p.PayrollID),
+            f"{p.FirstName} {p.LastName}",
+            f"{p.Salary:,.0f}",
+            f"{p.Bonus or 0:,.0f}",
+            f"{p.Deduction or 0:,.0f}",
+            f"{net:,.0f}",
+            p.PayDate.strftime("%Y-%m-%d") if p.PayDate else ""
+        ])
+
+    # Create table
+    table = Table(data, repeatRows=1)
+    style = TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
+        ('ALIGN',(2,1),(-2,-1),'RIGHT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 12),
+    ])
+    table.setStyle(style)
+
+    # Build PDF
+    elems = [table]
+    doc.build(elems)
+
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=payroll_report.pdf"},
+    )
+
+@app.get("/payrolls/department-summary")
+def get_department_payroll_summary(db: Session = Depends(get_db),
+                                   current_user: UserAccount = Depends(get_current_active_user)):
+    # Trả về DeptName, tổng net pay (Salary+Bonus-Deduction), số nhân viên trong phòng
+    results = (
+        db.query(
+            Department.DeptName,
+            func.count(Payroll.EmployeeID).label("employee_count"),
+            func.sum(Payroll.Salary + Payroll.Bonus - Payroll.Deduction).label("total_pay")
+        )
+        .join(Employee, Employee.DepartmentID == Department.DepartmentID)
+        .join(Payroll, Payroll.EmployeeID == Employee.EmployeeID)
+        .group_by(Department.DeptName)
+        .all()
+    )
+    # Chuyển kết quả thành dict list
+    summary = []
+    for r in results:
+        summary.append({
+            "department": r.DeptName,
+            "employees": r.employee_count,
+            "totalPay": float(r.total_pay) if r.total_pay is not None else 0,
+        })
+    return summary
+
+@app.post("/payrolls/process-next")
+def process_next_payroll(db: Session = Depends(get_db),
+                         current_user: UserAccount = Depends(get_current_active_user)):
+    try:
+        employees = db.query(Employee).all()
+        for emp in employees:
+            # Lấy bản ghi payroll gần nhất của nhân viên
+            last_payroll = (
+                db.query(Payroll)
+                .filter(Payroll.EmployeeID == emp.EmployeeID)
+                .order_by(Payroll.PayDate.desc())
+                .first()
+            )
+            if last_payroll:
+                # Tạo bản ghi mới với tháng kế tiếp
+                next_pay_date = last_payroll.PayDate + relativedelta(months=1)
+                new_payroll = Payroll(
+                    EmployeeID=emp.EmployeeID,
+                    Salary=last_payroll.Salary,
+                    Bonus=last_payroll.Bonus,  # hoặc tính lại thưởng
+                    Deduction=last_payroll.Deduction,  # hoặc tính lại trừ
+                    PayDate=next_pay_date,
+                )
+                db.add(new_payroll)
+        db.commit()
+        return {"message": "Next payroll processed successfully"}
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to process payroll: {e}")
+
 @app.post("/payrolls/", response_model=PayrollRead)
 def create_payroll(pay: PayrollCreate, db: Session = Depends(get_db),
                    current_user: UserAccount = Depends(get_current_active_user)):
@@ -489,11 +640,13 @@ def create_payroll(pay: PayrollCreate, db: Session = Depends(get_db),
     db.refresh(db_pay)
     return db_pay
 
+'''
 @app.get("/payrolls/", response_model=List[PayrollRead])
 def read_payrolls(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
                   current_user: UserAccount = Depends(get_current_active_user)):
     return db.query(Payroll).offset(skip).limit(limit).all()
-
+'''
+    
 @app.get("/payrolls/{payroll_id}", response_model=PayrollRead)
 def read_payroll(payroll_id: int, db: Session = Depends(get_db),
                  current_user: UserAccount = Depends(get_current_active_user)):
