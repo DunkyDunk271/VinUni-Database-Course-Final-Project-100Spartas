@@ -681,6 +681,40 @@ def delete_payroll(payroll_id: int, db: Session = Depends(get_db),
     return {"detail": "Payroll deleted"}
 
 # PerformanceReview CRUD
+@app.get("/performance_reviews/summary")
+def get_performance_review_summary(db: Session = Depends(get_db),
+                                   current_user: UserAccount = Depends(get_current_active_user)):
+    records = (
+        db.query(
+            PerformanceReview.ReviewID,
+            PerformanceReview.EmployeeID,
+            PerformanceReview.Score,
+            PerformanceReview.Comments,
+            PerformanceReview.WorkingHours,
+            PerformanceReview.ReviewDate,
+            Employee.FirstName,
+            Employee.LastName,
+            Department.DeptName
+        )
+        .join(Employee, PerformanceReview.EmployeeID == Employee.EmployeeID)
+        .join(Department, Employee.DepartmentID == Department.DepartmentID, isouter=True)
+        .all()
+    )
+
+    result = []
+    for r in records:
+        result.append({
+            "reviewId": r.ReviewID,
+            "employeeId": r.EmployeeID,
+            "score": r.Score,
+            "comments": r.Comments,
+            "workingHours": r.WorkingHours,
+            "reviewDate": r.ReviewDate.isoformat() if r.ReviewDate else None,
+            "name": f"{r.FirstName} {r.LastName}",
+            "department": r.DeptName or "Unknown",
+        })
+    return result
+
 @app.post("/performance_reviews/", response_model=PerformanceReviewRead)
 def create_performance_review(pr: PerformanceReviewCreate, db: Session = Depends(get_db),
                               current_user: UserAccount = Depends(get_current_active_user)):
@@ -700,10 +734,12 @@ def create_performance_review(pr: PerformanceReviewCreate, db: Session = Depends
     db.refresh(db_pr)
     return db_pr
 
+'''
 @app.get("/performance_reviews/", response_model=List[PerformanceReviewRead])
 def read_performance_reviews(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
                              current_user: UserAccount = Depends(get_current_active_user)):
     return db.query(PerformanceReview).offset(skip).limit(limit).all()
+'''
 
 @app.get("/performance_reviews/{review_id}", response_model=PerformanceReviewRead)
 def read_performance_review(review_id: int, db: Session = Depends(get_db),
