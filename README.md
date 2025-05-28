@@ -47,6 +47,49 @@ The Human Resources Information System (HRIS) is a comprehensive software soluti
 - **Week 4**: Testing, bug fixes, and documentation.
 - **Final Week**: Final presentation and submission.     
 
+## 6. Setup Instructions
+This setup is for Windows, If you use MacOS or Ubuntu, use the suitable command for those OS.
 
-   
+### Database setup
+- Install and start MySQL Server with name `root` and password `1234abcd`
+- Paste the Project_script.sql to the script and run in MySQL Workbench.
+
+### Backend Setup
+- Navigate to the project root directory: \
+  `cd VinUni-Database-Course-Final-Project-100Spartas`
+- Install required Python packages:  \
+  `pip install -r requirements.txt`
+- Verify database connection in `main.py:` Check that the connection string matches your MySQL credentials \
+  `DATABASE_URL = "mysql+pymysql://root:1234abcd@localhost:3306/HRIS"`
+
+### Frontend Setup
+- Navigate to the frontend directory: \
+  `cd frontend`
+- Install all required npm packages: \
+  `npm install` \
+  `npm install --save-dev concurrently` \
+  `npm install file-saver`
+
+### Running the Application
+- Option 1: Run Both Services Concurrently \
+  From the frontend directory:
+   `npm run start`
+- Option 2: Run Services Separately \
+   Backend: \
+  `cd VinUni-Database-Course-Final-Project-100Spartas \
+   python -m uvicorn main:app --reload`
+   Frontend: \
+  `cd frontend \
+   npm run dev`
+
+### Accessing the Application
+- Frontend: http://localhost:8081 (or check console output for exact port)
+- Backend API: http://127.0.0.1:8000
+- API Documentation: http://127.0.0.1:8000/docs
+
+### Default Login Credentials
+- Username: `hung_admin`
+- Password: `pass123`
+
+
 
