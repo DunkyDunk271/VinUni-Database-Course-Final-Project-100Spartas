@@ -31,6 +31,18 @@ const EmployeeTable = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({
+    FirstName: '',
+    LastName: '',
+    Email: '',
+    Phone: '',
+    Gender: 1,
+    DepartmentID: undefined as number | undefined,
+  });
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
   // Get JWT token from localStorage
   const token = localStorage.getItem('access_token');
   console.log('JWT Token:', token);
@@ -51,6 +63,8 @@ const EmployeeTable = () => {
       setEmployees([]);
     }
   };
+
+  
 
   // Fetch departments from backend API
   const fetchDepartments = async () => {
@@ -135,11 +149,111 @@ const EmployeeTable = () => {
             </SelectContent>
           </Select>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowAddForm(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Employee
         </Button>
       </div>
+
+      {showAddForm && (
+        <div className="p-4 border rounded mb-6 bg-white shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Add New Employee</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <input
+              type="text"
+              placeholder="First Name"
+              value={newEmployee.FirstName}
+              onChange={(e) => setNewEmployee({ ...newEmployee, FirstName: e.target.value })}
+              className="border p-2 rounded w-full"
+            />
+            <input
+              type="text"
+              placeholder="Last Name"
+              value={newEmployee.LastName}
+              onChange={(e) => setNewEmployee({ ...newEmployee, LastName: e.target.value })}
+              className="border p-2 rounded w-full"
+            />
+            <input
+              type="email"
+              placeholder="Email"
+              value={newEmployee.Email}
+              onChange={(e) => setNewEmployee({ ...newEmployee, Email: e.target.value })}
+              className="border p-2 rounded w-full"
+            />
+            <input
+              type="text"
+              placeholder="Phone"
+              value={newEmployee.Phone}
+              onChange={(e) => setNewEmployee({ ...newEmployee, Phone: e.target.value })}
+              className="border p-2 rounded w-full"
+            />
+            <select
+              value={newEmployee.Gender}
+              onChange={(e) => setNewEmployee({ ...newEmployee, Gender: parseInt(e.target.value) })}
+              className="border p-2 rounded w-full"
+            >
+              <option value={1}>Male</option>
+              <option value={0}>Female</option>
+            </select>
+            <Select
+              value={newEmployee.DepartmentID?.toString() || ''}
+              onValueChange={(val) => setNewEmployee({ ...newEmployee, DepartmentID: val ? parseInt(val) : undefined })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Department" />
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map((dept) => (
+                  <SelectItem key={dept.DepartmentID} value={dept.DepartmentID.toString()}>
+                    {dept.DeptName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {addError && <p className="text-red-600 mb-2">{addError}</p>}
+          <div className="flex space-x-4">
+            <Button
+              disabled={adding}
+              onClick={async () => {
+                setAddError(null);
+                setAdding(true);
+                try {
+                  const token = localStorage.getItem('access_token');
+                  await axios.post(
+                    `${API_URL}/employees`,
+                    {
+                      FirstName: newEmployee.FirstName,
+                      LastName: newEmployee.LastName,
+                      Email: newEmployee.Email,
+                      Phone: newEmployee.Phone,
+                      Gender: newEmployee.Gender,
+                      DepartmentID: newEmployee.DepartmentID,
+                    },
+                    {
+                      headers: { Authorization: token ? `Bearer ${token}` : '' },
+                    }
+                  );
+                  // Refresh employee list after successful add
+                  await fetchEmployees();
+                  setShowAddForm(false);
+                  setNewEmployee({ FirstName: '', LastName: '', Email: '', Phone: '', Gender: 1, DepartmentID: undefined });
+                } catch (error: any) {
+                  setAddError(error.response?.data?.detail || 'Failed to add employee');
+                } finally {
+                  setAdding(false);
+                }
+              }}
+            >
+              {adding ? 'Adding...' : 'Add Employee'}
+            </Button>
+            <Button variant="outline" onClick={() => setShowAddForm(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
 
       {/* Employee Table */}
       <div className="border rounded-lg overflow-hidden">
@@ -150,7 +264,6 @@ const EmployeeTable = () => {
               <TableHead className="font-semibold">Contact</TableHead>
               <TableHead className="font-semibold">Department</TableHead>
               <TableHead className="font-semibold">Gender</TableHead>
-              <TableHead className="font-semibold">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -185,15 +298,9 @@ const EmployeeTable = () => {
                     {employee.Gender === 1
                       ? 'Male'
                       : employee.Gender === 0
-                      ? 'Female'
-                      : 'Not specified'}
+                        ? 'Female'
+                        : 'Not specified'}
                   </span>
-                </TableCell>
-                <TableCell>
-                  <Button variant="outline" size="sm">
-                    <Edit className="w-4 h-4 mr-1" />
-                    Edit
-                  </Button>
                 </TableCell>
               </TableRow>
             ))}
