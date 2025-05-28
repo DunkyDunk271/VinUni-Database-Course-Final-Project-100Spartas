@@ -39,9 +39,9 @@ const EmployeeTable = () => {
   const fetchEmployees = async () => {
     console.log('Fetching employees with token:', token);
     try {
-      const response = await axios.get(`${API_URL}/employees`, {
+      const response = await axios.get(`${API_URL}/employees/`, {
         headers: {
-          "Authorization": token ? `Bearer ${token}` : '',
+          Authorization: token ? `Bearer ${token}` : '',
         },
       });
       console.log('Fetched Employees:', response.data);

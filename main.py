@@ -11,6 +11,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta   
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import sys
 
 # --- CONFIG ---
@@ -105,6 +106,18 @@ class UserAccount(Base):
     Username = Column(String(50), unique=True, nullable=False)
     password = Column(String(255), nullable=False)
     admin = relationship("Admin", back_populates="user_account")
+
+class AttendanceWithEmployee(BaseModel):
+    AttendanceID: int
+    EmployeeID: int
+    Date: str
+    timeIn: Optional[str] = None
+    timeOut: Optional[str] = None
+    EmployeeName: str
+    DepartmentName: Optional[str] = None
+
+    class Config:
+        orm_mode = True
 
 # --- Pydantic Schemas ---
 # Department
@@ -347,7 +360,7 @@ def create_employee(emp: EmployeeCreate, db: Session = Depends(get_db),
         db_emp.Gender = int.from_bytes(db_emp.Gender, "big")
     return db_emp
 
-@app.get("/employees", response_model=List[EmployeeRead])
+@app.get("/employees/", response_model=List[EmployeeRead])
 def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
                    current_user: UserAccount = Depends(get_current_active_user)):
     emps = db.query(Employee).offset(skip).limit(limit).all()
@@ -417,11 +430,13 @@ def create_attendance(att: AttendanceCreate, db: Session = Depends(get_db),
     db.refresh(db_att)
     return db_att
 
+'''
 @app.get("/attendances/", response_model=List[AttendanceRead])
 def read_attendances(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
                      current_user: UserAccount = Depends(get_current_active_user)):
     return db.query(Attendance).offset(skip).limit(limit).all()
-
+'''
+    
 @app.get("/attendances/{attendance_id}", response_model=AttendanceRead)
 def read_attendance(attendance_id: int, db: Session = Depends(get_db),
                     current_user: UserAccount = Depends(get_current_active_user)):
@@ -728,4 +743,40 @@ def debug_print(*args, **kwargs):
     sys.stdout.flush()
 
 # Use debug_print instead of print
-debug_print("Root endpoint accessed")
+debug_print("HRIS FastAPI Backend started")
+
+@app.get("/attendances/", response_model=List[AttendanceWithEmployee])
+def read_attendances(skip: int = 0, limit: int = 100, 
+                     db: Session = Depends(get_db),
+                     current_user: UserAccount = Depends(get_current_active_user)):
+    # Query Attendance joined with Employee and Department info
+    records = (
+        db.query(
+            Attendance.AttendanceID,
+            Attendance.EmployeeID,
+            Attendance.Date,
+            Attendance.timeIn,
+            Attendance.timeOut,
+            Employee.FirstName,
+            Employee.LastName,
+            Department.DeptName,
+        )
+        .join(Employee, Attendance.EmployeeID == Employee.EmployeeID)
+        .join(Department, Employee.DepartmentID == Department.DepartmentID, isouter=True)
+        .offset(skip).limit(limit).all()
+    )
+
+    # Convert each record field to string where needed
+    result = []
+    for r in records:
+        result.append({
+            "AttendanceID": r.AttendanceID,
+            "EmployeeID": r.EmployeeID,
+            "Date": r.Date.isoformat() if r.Date else None,
+            "timeIn": r.timeIn.strftime("%H:%M:%S") if r.timeIn else None,
+            "timeOut": r.timeOut.strftime("%H:%M:%S") if r.timeOut else None,
+            "EmployeeName": f"{r.FirstName} {r.LastName}",
+            "DepartmentName": r.DeptName,
+        })
+
+    return result
